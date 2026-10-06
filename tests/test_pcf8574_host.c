@@ -49,6 +49,39 @@ int main(void) {
     assert(pcf8574_read_byte(&dev, &v) == false && v == sentinel);
     assert(pcf8574_read_byte(&dev, NULL) == false);
     assert(pcf8574_read_byte(NULL, &v) == false);
+    // --- pin API ---
+    assert(pcf8574_init(&dev, &i2c0, 0x20, 0xFF) == true);
+    assert(pcf8574_write_pin(&dev, 0, false) == true);
+    assert(dev.out_state == 0xFE && mock_device_byte == 0xFE);
+    assert(pcf8574_write_pin(&dev, 0, true) == true);
+    assert(dev.out_state == 0xFF);
+    assert(pcf8574_write_pin(&dev, 8, true) == false); // pin > 7 rejected
+    assert(pcf8574_write_pin(NULL, 0, true) == false);
+    // RMW preserves other outputs: clear P3 while P0 stays low
+    assert(pcf8574_write_byte(&dev, 0xFE) == true); // P0=0, rest=1
+    assert(pcf8574_write_pin(&dev, 3, false) == true);
+    assert(dev.out_state == 0xF6);
+    // read_pin masks fresh bus value
+    mock_device_byte = 0xF6;
+    bool lvl = true;
+    assert(pcf8574_read_pin(&dev, 0, &lvl) == true && lvl == false);
+    assert(pcf8574_read_pin(&dev, 1, &lvl) == true && lvl == true);
+    assert(pcf8574_read_pin(&dev, 8, &lvl) == false);
+    assert(pcf8574_read_pin(&dev, 0, NULL) == false);
+    // toggle flips cache bit without extra read
+    assert(pcf8574_write_byte(&dev, 0xFF) == true);
+    assert(pcf8574_toggle_pin(&dev, 2) == true);
+    assert(dev.out_state == 0xFB && mock_device_byte == 0xFB);
+    assert(pcf8574_toggle_pin(&dev, 2) == true);
+    assert(dev.out_state == 0xFF);
+    assert(pcf8574_toggle_pin(&dev, 9) == false);
+    // inputs mask: 1s = inputs
+    assert(pcf8574_set_inputs_mask(&dev, 0xF0) == true);
+    assert((dev.out_state & 0xF0) == 0xF0);
+    // is_connected probes bus
+    assert(pcf8574_is_connected(&dev) == true);
+    mock_fail_next = true;
+    assert(pcf8574_is_connected(&dev) == false);
     printf("CORE PASS\n");
     return 0;
 }
