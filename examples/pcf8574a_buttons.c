@@ -11,6 +11,21 @@
 
 #define PCF8574A_ADDR_A0_A1_A2_GND 0x38u
 
+// On-board LED sign-of-life (independent of USB): slow blink = running,
+// fast blink = PCF8574A init/probe failed. Most RP2040 boards use GP25.
+#ifndef DIAG_LED_PIN
+#define DIAG_LED_PIN 25
+#endif
+
+static void diag_fatal(void) {
+    while (true) {
+        gpio_put(DIAG_LED_PIN, 1);
+        sleep_ms(100);
+        gpio_put(DIAG_LED_PIN, 0);
+        sleep_ms(100);
+    }
+}
+
 static void print_pressed(uint8_t v) {
     // v is the raw port byte: 0 bit = pressed (pulled to GND)
     printf("buttons: 0x%02X pressed:", v);
@@ -27,6 +42,9 @@ static void print_pressed(uint8_t v) {
 
 int main(void) {
     stdio_init_all();
+    gpio_init(DIAG_LED_PIN);
+    gpio_set_dir(DIAG_LED_PIN, GPIO_OUT);
+    gpio_put(DIAG_LED_PIN, 1); // on from here = we reached main()
     i2c_init(i2c0, 100 * 1000);
     gpio_set_function(4, GPIO_FUNC_I2C);
     gpio_set_function(5, GPIO_FUNC_I2C);
@@ -35,19 +53,20 @@ int main(void) {
     pcf8574_t dev;
     if (!pcf8574_init(&dev, i2c0, PCF8574A_ADDR_A0_A1_A2_GND, 0xFF)) {
         printf("pcf8574A not found at 0x38 (check A0-A2 -> GND)\n");
-        return 1;
+        diag_fatal();
     }
     if (!pcf8574_set_inputs_mask(&dev, 0xFF)) { // all 8 pins as inputs
         printf("failed to configure inputs\n");
-        return 1;
+        diag_fatal();
     }
     if (!pcf8574_is_connected(&dev)) {
         printf("pcf8574A probe failed\n");
-        return 1;
+        diag_fatal();
     }
 
     uint8_t last = 0xFF;
     print_pressed(last);
+    uint32_t next_blink = 0;
     while (true) {
         uint8_t v = 0;
         if (pcf8574_read_byte(&dev, &v) && v != last) {
@@ -57,6 +76,10 @@ int main(void) {
                 last = v;
                 print_pressed(v);
             }
+        }
+        if ((uint32_t)to_ms_since_boot(get_absolute_time()) >= next_blink) {
+            gpio_xor_mask(1u << DIAG_LED_PIN); // heartbeat: proves main loop runs
+            next_blink = (uint32_t)to_ms_since_boot(get_absolute_time()) + 500;
         }
         sleep_ms(10);
     }
