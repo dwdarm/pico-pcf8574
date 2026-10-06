@@ -11,6 +11,18 @@
 
 #define PCF8574A_ADDR_A0_A1_A2_GND 0x38u
 
+// I2C wiring: override with -DPCF_SDA_PIN=.. -DPCF_SCL_PIN=.. -DPCF_I2C=i2c1
+// to match your board. Defaults are I2C0 on GP4/GP5 (RP2040-Zero pads 19/18).
+#ifndef PCF_I2C_INST
+#define PCF_I2C_INST i2c0
+#endif
+#ifndef PCF_SDA_PIN
+#define PCF_SDA_PIN 4
+#endif
+#ifndef PCF_SCL_PIN
+#define PCF_SCL_PIN 5
+#endif
+
 // On-board LED sign-of-life (independent of USB): slow blink = running,
 // fast blink = PCF8574A init/probe failed. Most RP2040 boards use GP25.
 #ifndef DIAG_LED_PIN
@@ -53,21 +65,23 @@ int main(void) {
     gpio_init(DIAG_LED_PIN);
     gpio_set_dir(DIAG_LED_PIN, GPIO_OUT);
     gpio_put(DIAG_LED_PIN, 1); // on from here = we reached main()
-    i2c_init(i2c0, 100 * 1000);
-    gpio_set_function(4, GPIO_FUNC_I2C);
-    gpio_set_function(5, GPIO_FUNC_I2C);
-    gpio_pull_up(4); gpio_pull_up(5);
+    i2c_init(PCF_I2C_INST, 100 * 1000);
+    gpio_set_function(PCF_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(PCF_SCL_PIN, GPIO_FUNC_I2C);
+    gpio_pull_up(PCF_SDA_PIN); gpio_pull_up(PCF_SCL_PIN);
+    printf("i2c SDA=GP%u SCL=GP%u @100kHz, expecting PCF8574A at 0x38\n",
+           PCF_SDA_PIN, PCF_SCL_PIN);
 
     // Retry init forever with status output: a monitor opened at any time
     // sees what is happening instead of one easily-missed boot line.
     pcf8574_t dev;
     for (;;) {
-        if (pcf8574_init(&dev, i2c0, PCF8574A_ADDR_A0_A1_A2_GND, 0xFF) &&
+        if (pcf8574_init(&dev, PCF_I2C_INST, PCF8574A_ADDR_A0_A1_A2_GND, 0xFF) &&
             pcf8574_set_inputs_mask(&dev, 0xFF)) { // all 8 pins as inputs
             break;
         }
         printf("pcf8574A not found at 0x38, retrying...\n");
-        i2c_scan(i2c0);
+        i2c_scan(PCF_I2C_INST);
         sleep_ms(2000);
     }
     printf("pcf8574A ready at 0x38\n");
@@ -80,7 +94,7 @@ int main(void) {
         uint8_t v = 0;
         if (!pcf8574_read_byte(&dev, &v)) {
             printf("read failed, re-probing...\n");
-            i2c_scan(i2c0);
+            i2c_scan(PCF_I2C_INST);
             sleep_ms(2000);
         } else if (v != last) {
             sleep_ms(20); // debounce: let contacts settle, then re-read
