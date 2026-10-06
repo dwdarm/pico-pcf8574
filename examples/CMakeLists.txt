@@ -1,0 +1,9 @@
+add_executable(output_blink output_blink.c)
+target_link_libraries(output_blink PRIVATE pcf8574 pico_stdlib hardware_i2c)
+pico_add_extra_outputs(output_blink)
+pico_enable_stdio_usb(output_blink 1)
+
+add_executable(input_buttons input_buttons.c)
+target_link_libraries(input_buttons PRIVATE pcf8574 pico_stdlib hardware_i2c)
+pico_add_extra_outputs(input_buttons)
+pico_enable_stdio_usb(input_buttons 1)
