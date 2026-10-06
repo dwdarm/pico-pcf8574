@@ -7,3 +7,8 @@ add_executable(input_buttons input_buttons.c)
 target_link_libraries(input_buttons PRIVATE pcf8574 pico_stdlib hardware_i2c)
 pico_add_extra_outputs(input_buttons)
 pico_enable_stdio_usb(input_buttons 1)
+
+add_executable(pcf8574a_buttons pcf8574a_buttons.c)
+target_link_libraries(pcf8574a_buttons PRIVATE pcf8574 pico_stdlib hardware_i2c)
+pico_add_extra_outputs(pcf8574a_buttons)
+pico_enable_stdio_usb(pcf8574a_buttons 1)
